@@ -2,6 +2,17 @@
 
 function norm(s) { return (s || '').toString().replace(/\s+/g, ' ').trim(); }
 
+function unwrapUrl(href) {
+  try {
+    const u = new URL(href);
+    if (/google\./i.test(u.hostname) && u.pathname === '/url') {
+      const q = u.searchParams.get('q');
+      if (q && /^https?:\/\//i.test(q)) return q;
+    }
+  } catch (_) {}
+  return href;
+}
+
 const UI_NOISE = new Set([
   'results','directions','hotels','things to do','restaurants','gas stations',
   'pharmacies','parking','transit','back','close','more','nearby','explore'
@@ -89,12 +100,18 @@ function extractPhone(scope) {
 }
 
 function extractWebsite(scope) {
-  const el = (scope || document.body).querySelector('[data-item-id="authority"]');
+  const root = scope || document.body;
+  const el = root.querySelector('[data-item-id="authority"]');
   if (el) {
     const a = el.querySelector('a[href]') || (el.tagName === 'A' ? el : null);
-    if (a) return a.href;
+    if (a) return unwrapUrl(a.href);
     const href = el.getAttribute('href');
-    if (href) return href;
+    if (href) return unwrapUrl(href);
+  }
+  // Fallback: any external link in detail panel that isn't a Google/Maps URL
+  for (const a of root.querySelectorAll('a[href^="http"]')) {
+    const h = a.href || '';
+    if (!/google\.|goo\.gl/i.test(h)) return unwrapUrl(h);
   }
   return '';
 }
