@@ -69,6 +69,16 @@ ${rows}
 </html>`;
 }
 
+function buildCsv() {
+  const cols = ['Name','Phone','Website','Address','Maps Link'];
+  const header = cols.join(',');
+  const csvRow = b => cols.map((_, i) => {
+    const val = [b.name, b.phone, b.website, b.address, b.mapsLink][i] || '';
+    return '"' + String(val).replace(/"/g, '""') + '"';
+  }).join(',');
+  return [header, ...businesses.map(csvRow)].join('\r\n');
+}
+
 function downloadText(content, filename, mime) {
   const b64 = btoa(Array.from(new TextEncoder().encode(content), b => String.fromCharCode(b)).join(''));
   const url  = `data:${mime};base64,${b64}`;
@@ -108,6 +118,19 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     const filename = `maps_export_${ts}.html`;
     try {
       downloadText(buildHtml(), filename, 'text/html');
+      sendResponse({ ok: true, filename });
+    } catch (e) {
+      sendResponse({ ok: false, error: String(e) });
+    }
+    return true;
+  }
+
+  if (msg.type === 'EXPORT_CSV') {
+    if (!businesses.length) { sendResponse({ ok: false, error: 'No data' }); return true; }
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const filename = `maps_export_${ts}.csv`;
+    try {
+      downloadText(buildCsv(), filename, 'text/csv');
       sendResponse({ ok: true, filename });
     } catch (e) {
       sendResponse({ ok: false, error: String(e) });
