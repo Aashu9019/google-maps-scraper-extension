@@ -51,7 +51,14 @@ function extractAddress(scope) {
 }
 
 function extractPhone(scope) {
-  const phoneItem = (scope || document.body).querySelector('[data-item-id^="phone:tel:"]');
+  const root = scope || document.body;
+
+  // 1. tel: link
+  const tel = root.querySelector('a[href^="tel:"]');
+  if (tel) return tel.href.replace(/^tel:/i, '').trim();
+
+  // 2. data-item-id^="phone:tel:" with decodeURIComponent
+  const phoneItem = root.querySelector('[data-item-id^="phone:tel:"]');
   if (phoneItem) {
     try {
       const raw = decodeURIComponent(phoneItem.getAttribute('data-item-id').replace(/^phone:tel:/i, '')).trim();
@@ -60,6 +67,23 @@ function extractPhone(scope) {
     const inner = norm(phoneItem.textContent || '');
     const m = inner.match(/(\+?[\d][\d\s().‑\-]{5,}[\d])/);
     if (m && m[1].replace(/\D/g, '').length >= 7) return norm(m[1]);
+  }
+
+  // 3. aria-label "Phone: ..."
+  for (const node of root.querySelectorAll('[aria-label]')) {
+    const label = (node.getAttribute('aria-label') || '').trim();
+    const m = label.match(/^(?:phone|tel)[:\s]+(\+?[\d][\d\s().‑\-]{5,}[\d])/i);
+    if (m) return norm(m[1]);
+  }
+
+  // 4. Leaf-element text scan — desktop Maps renders phone as bare text
+  for (const node of root.querySelectorAll('*')) {
+    if (node.children.length > 0) continue;
+    const text = (node.textContent || '').trim();
+    if (/^(\+?[\d][\d\s().‑\-]{5,}[\d])$/.test(text)) {
+      const digits = text.replace(/\D/g, '');
+      if (digits.length >= 7 && digits.length <= 15) return text;
+    }
   }
   return '';
 }
