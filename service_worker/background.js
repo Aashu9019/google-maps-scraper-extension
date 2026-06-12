@@ -3,8 +3,16 @@
 let businesses = [];
 let autoScrapeProgress = null;
 
-// Restore persisted data when the service worker starts (survives SW restarts)
-chrome.storage.local.get('businesses', r => { businesses = r.businesses || []; });
+// storageReady resolves after the persisted businesses array is loaded.
+// All message handlers await this to avoid a race where the first message
+// arrives and runs upsert() while businesses is still [], then the storage
+// callback fires and overwrites businesses with the old (no-phone) data.
+const storageReady = new Promise(resolve => {
+  chrome.storage.local.get('businesses', r => {
+    businesses = r.businesses || [];
+    resolve();
+  });
+});
 
 function norm(s) { return (s || '').toString().replace(/\s+/g, ' ').trim(); }
 
@@ -266,56 +274,60 @@ function downloadText(content, filename, mime) {
 }
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  if (!msg?.type) return;
+  if (!msg?.type) return false;
 
-  if (msg.type === 'ADD_BUSINESSES') {
-    if (Array.isArray(msg.businesses) && msg.businesses.length) upsert(msg.businesses);
-    sendResponse({ ok: true, count: businesses.length });
-    return true;
-  }
-
-  if (msg.type === 'AUTO_SCRAPE_PROGRESS') {
-    autoScrapeProgress = { done: msg.done, total: msg.total, current: msg.current, status: msg.status };
-    sendResponse({ ok: true });
-    return true;
-  }
-
-  if (msg.type === 'GET_STATE') {
-    sendResponse({ ok: true, count: businesses.length, businesses, autoScrapeProgress });
-    return true;
-  }
-
-  if (msg.type === 'CLEAR') {
-    businesses = [];
-    autoScrapeProgress = null;
-    persist();
-    sendResponse({ ok: true });
-    return true;
-  }
-
-  if (msg.type === 'EXPORT_HTML') {
-    if (!businesses.length) { sendResponse({ ok: false, error: 'No data' }); return true; }
-    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    const filename = `maps_export_${ts}.html`;
-    try {
-      downloadText(buildHtml(), filename, 'text/html');
-      sendResponse({ ok: true, filename });
-    } catch (e) {
-      sendResponse({ ok: false, error: String(e) });
+  storageReady.then(() => {
+    if (msg.type === 'ADD_BUSINESSES') {
+      if (Array.isArray(msg.businesses) && msg.businesses.length) upsert(msg.businesses);
+      sendResponse({ ok: true, count: businesses.length });
+      return;
     }
-    return true;
-  }
 
-  if (msg.type === 'EXPORT_CSV') {
-    if (!businesses.length) { sendResponse({ ok: false, error: 'No data' }); return true; }
-    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    const filename = `maps_export_${ts}.csv`;
-    try {
-      downloadText(buildCsv(), filename, 'text/csv');
-      sendResponse({ ok: true, filename });
-    } catch (e) {
-      sendResponse({ ok: false, error: String(e) });
+    if (msg.type === 'AUTO_SCRAPE_PROGRESS') {
+      autoScrapeProgress = { done: msg.done, total: msg.total, current: msg.current, status: msg.status };
+      sendResponse({ ok: true });
+      return;
     }
-    return true;
-  }
+
+    if (msg.type === 'GET_STATE') {
+      sendResponse({ ok: true, count: businesses.length, businesses, autoScrapeProgress });
+      return;
+    }
+
+    if (msg.type === 'CLEAR') {
+      businesses = [];
+      autoScrapeProgress = null;
+      persist();
+      sendResponse({ ok: true });
+      return;
+    }
+
+    if (msg.type === 'EXPORT_HTML') {
+      if (!businesses.length) { sendResponse({ ok: false, error: 'No data' }); return; }
+      const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const filename = `maps_export_${ts}.html`;
+      try {
+        downloadText(buildHtml(), filename, 'text/html');
+        sendResponse({ ok: true, filename });
+      } catch (e) {
+        sendResponse({ ok: false, error: String(e) });
+      }
+      return;
+    }
+
+    if (msg.type === 'EXPORT_CSV') {
+      if (!businesses.length) { sendResponse({ ok: false, error: 'No data' }); return; }
+      const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const filename = `maps_export_${ts}.csv`;
+      try {
+        downloadText(buildCsv(), filename, 'text/csv');
+        sendResponse({ ok: true, filename });
+      } catch (e) {
+        sendResponse({ ok: false, error: String(e) });
+      }
+      return;
+    }
+  });
+
+  return true; // keep channel open for the async storageReady.then() response
 });
