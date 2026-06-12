@@ -32,6 +32,49 @@ function upsert(incoming) {
   businesses = Array.from(map.values());
 }
 
+function esc(s) {
+  return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function buildHtml() {
+  const rows = businesses.map((b, i) => {
+    const phone   = b.phone   ? `<div class="detail">📞 <a href="tel:${esc(b.phone)}">${esc(b.phone)}</a></div>` : '';
+    const website = b.website ? `<div class="detail">🌐 <a href="${esc(b.website)}" target="_blank" rel="noopener">${esc(b.website)}</a></div>` : '';
+    const address = b.address ? `<div class="detail">📍 ${esc(b.address)}</div>` : '';
+    const maps    = b.mapsLink ? `<div class="detail"><a href="${esc(b.mapsLink)}" target="_blank" rel="noopener">View on Google Maps</a></div>` : '';
+    return `<div class="card" id="card${i}">
+      <div class="card-name">${esc(b.name || '(No name)')}</div>
+      ${phone}${website}${address}${maps}
+    </div>`;
+  }).join('');
+
+  return `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Google Maps Scrape Results</title>
+<style>
+  body { font-family: sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; background: #f9f9f9; }
+  h1 { font-size: 22px; margin-bottom: 20px; color: #1a73e8; }
+  .card { background: #fff; border-radius: 10px; padding: 16px; margin-bottom: 14px; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
+  .card-name { font-size: 17px; font-weight: 700; margin-bottom: 8px; }
+  .detail { font-size: 13px; color: #555; margin-top: 4px; }
+  a { color: #1a73e8; }
+</style>
+</head>
+<body>
+<h1>Google Maps Businesses (${businesses.length})</h1>
+${rows}
+</body>
+</html>`;
+}
+
+function downloadText(content, filename, mime) {
+  const b64 = btoa(Array.from(new TextEncoder().encode(content), b => String.fromCharCode(b)).join(''));
+  const url  = `data:${mime};base64,${b64}`;
+  chrome.downloads.download({ url, filename, saveAs: false });
+}
+
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (!msg?.type) return;
 
@@ -56,6 +99,19 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     businesses = [];
     autoScrapeProgress = null;
     sendResponse({ ok: true });
+    return true;
+  }
+
+  if (msg.type === 'EXPORT_HTML') {
+    if (!businesses.length) { sendResponse({ ok: false, error: 'No data' }); return true; }
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const filename = `maps_export_${ts}.html`;
+    try {
+      downloadText(buildHtml(), filename, 'text/html');
+      sendResponse({ ok: true, filename });
+    } catch (e) {
+      sendResponse({ ok: false, error: String(e) });
+    }
     return true;
   }
 });
