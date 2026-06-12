@@ -301,13 +301,20 @@ async function runAutoScrape() {
     anchor.click();
     await sleep(500);
 
+    console.log('[Scraper] clicked, waiting for detail…', target.name);
     const loaded = await waitForDetailLoaded(12000);
+    console.log('[Scraper] loaded:', loaded, '| url:', window.location.href.slice(0, 80));
     if (loaded) {
       await sleep(1500);
+      const tel   = document.querySelector('a[href^="tel:"]');
+      const auth  = document.querySelector('[data-item-id="authority"]');
+      const items = [...document.querySelectorAll('[data-item-id]')].map(e => e.getAttribute('data-item-id'));
+      console.log('[Scraper] tel:', tel?.href, '| authority:', !!auth, '| data-item-ids:', items);
       const detail = extractDetailPanel();
+      console.log('[Scraper] detail:', JSON.stringify(detail));
       if (detail) {
         results.push(detail);
-        try { chrome.runtime.sendMessage({ type: 'ADD_BUSINESSES', businesses: [detail] }); } catch (_) {}
+        try { chrome.runtime.sendMessage({ type: 'ADD_BUSINESSES', businesses: [detail] }); } catch (e) { console.error('[Scraper] send failed:', e); }
       }
     }
 
