@@ -85,8 +85,7 @@ function collectListings() {
     const key = placeKeyFromUrl(a.href) || name.toLowerCase();
     if (!key || seen.has(key)) continue;
     seen.add(key);
-    const socials = isOnDetailPage() ? extractSocials(document.body) : {};
-    results.push({ id: key, name, address: '', phone: '', website: '', mapsLink: a.href, socials });
+    results.push({ id: key, name, address: '', phone: '', website: '', mapsLink: a.href, socials: {} });
   }
   return results;
 }
@@ -108,6 +107,89 @@ function extractDetailPanel() {
     mapsLink: window.location.href,
     socials:  extractSocials(scope),
   };
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function waitForDetailLoaded(timeout = 7000) {
+  return new Promise(resolve => {
+    const start = Date.now();
+    function check() {
+      if (!window.location.href.includes('/maps/place')) { resolve(false); return; }
+      const h1 = document.querySelector('[role="main"] h1') || document.querySelector('h1');
+      if (h1 && norm(h1.textContent).length > 1) { resolve(true); return; }
+      if (Date.now() - start > timeout) { resolve(false); return; }
+      setTimeout(check, 250);
+    }
+    check();
+  });
+}
+
+function waitForListView(timeout = 6000) {
+  return new Promise(resolve => {
+    const start = Date.now();
+    function check() {
+      if (window.location.href.includes('/maps/place')) {
+        if (Date.now() - start > timeout) { resolve(false); return; }
+        setTimeout(check, 250); return;
+      }
+      const anchors = document.querySelectorAll('a[href*="/maps/place/"]');
+      if (anchors.length > 0) { resolve(true); return; }
+      if (Date.now() - start > timeout) { resolve(false); return; }
+      setTimeout(check, 250);
+    }
+    check();
+  });
+}
+
+function sendProgress(done, total, current, status) {
+  try { chrome.runtime.sendMessage({ type: 'AUTO_SCRAPE_PROGRESS', done, total, current, status }); } catch (_) {}
+}
+
+let autoScraping = false;
+
+async function runAutoScrape() {
+  if (autoScraping) return { error: 'already_running' };
+  autoScraping = true;
+
+  const anchors = Array.from(document.querySelectorAll('a[href*="/maps/place/"]')).filter(a => {
+    const rect = a.getBoundingClientRect();
+    if (rect.width < 5 || rect.height < 5) return false;
+    const name = norm(a.getAttribute('aria-label') || '');
+    return name && isRealName(name);
+  });
+
+  const total = anchors.length;
+  let done = 0;
+  const results = [];
+
+  for (const anchor of anchors) {
+    if (!autoScraping) break;
+    const name = norm(anchor.getAttribute('aria-label') || '');
+    sendProgress(done, total, name, 'scraping');
+
+    anchor.click();
+    await sleep(400);
+    const loaded = await waitForDetailLoaded(7000);
+
+    if (loaded) {
+      await sleep(600);
+      const detail = extractDetailPanel();
+      if (detail) results.push(detail);
+    }
+
+    history.back();
+    await waitForListView(6000);
+    await sleep(400);
+    done++;
+  }
+
+  if (results.length) {
+    try { chrome.runtime.sendMessage({ type: 'ADD_BUSINESSES', businesses: results }); } catch (_) {}
+  }
+  sendProgress(done, total, '', 'done');
+  autoScraping = false;
+  return { ok: true, done: results.length };
 }
 
 let seenIds = new Set();
@@ -136,6 +218,15 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
       if (l.length) sendUpdate(l);
       sendResponse({ ok: true, count: l.length });
     }, 300);
+    return true;
+  }
+  if (msg?.type === 'AUTO_SCRAPE') {
+    runAutoScrape().then(sendResponse);
+    return true;
+  }
+  if (msg?.type === 'STOP_AUTO_SCRAPE') {
+    autoScraping = false;
+    sendResponse({ ok: true });
     return true;
   }
 });
