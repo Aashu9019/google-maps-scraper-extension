@@ -3,7 +3,14 @@
 let businesses = [];
 let autoScrapeProgress = null;
 
+// Restore persisted data when the service worker starts (survives SW restarts)
+chrome.storage.local.get('businesses', r => { businesses = r.businesses || []; });
+
 function norm(s) { return (s || '').toString().replace(/\s+/g, ' ').trim(); }
+
+function persist() {
+  chrome.storage.local.set({ businesses });
+}
 
 function upsert(incoming) {
   const map = new Map();
@@ -30,6 +37,7 @@ function upsert(incoming) {
     }
   }
   businesses = Array.from(map.values());
+  persist();
 }
 
 function esc(s) {
@@ -280,6 +288,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === 'CLEAR') {
     businesses = [];
     autoScrapeProgress = null;
+    persist();
     sendResponse({ ok: true });
     return true;
   }

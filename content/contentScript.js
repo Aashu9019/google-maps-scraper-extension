@@ -20,7 +20,8 @@ const UI_NOISE = new Set([
 ]);
 function isRealName(n) {
   return !(!n || n.length < 2 || n.length > 120 ||
-    UI_NOISE.has(n.toLowerCase()) || /^[\d\s.,\-]+$/.test(n));
+    UI_NOISE.has(n.toLowerCase()) || /^[\d\s.,\-]+$/.test(n) ||
+    /google\s+account/i.test(n) || /@\S+\.\S+/.test(n));
 }
 
 function placeKeyFromUrl(url) {
@@ -213,7 +214,6 @@ function extractDetailPanel() {
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-// KEY FIX: don't resolve(false) when not on detail page — keep polling until URL changes
 function waitForDetailLoaded(timeout = 12000) {
   return new Promise(resolve => {
     const start = Date.now();
@@ -301,20 +301,15 @@ async function runAutoScrape() {
     anchor.click();
     await sleep(500);
 
-    console.log('[Scraper] clicked, waiting for detail…', target.name);
     const loaded = await waitForDetailLoaded(12000);
-    console.log('[Scraper] loaded:', loaded, '| url:', window.location.href.slice(0, 80));
     if (loaded) {
       await sleep(1500);
-      const tel   = document.querySelector('a[href^="tel:"]');
-      const auth  = document.querySelector('[data-item-id="authority"]');
-      const items = [...document.querySelectorAll('[data-item-id]')].map(e => e.getAttribute('data-item-id'));
-      console.log('[Scraper] tel:', tel?.href, '| authority:', !!auth, '| data-item-ids:', items);
       const detail = extractDetailPanel();
-      console.log('[Scraper] detail:', JSON.stringify(detail));
       if (detail) {
         results.push(detail);
-        try { chrome.runtime.sendMessage({ type: 'ADD_BUSINESSES', businesses: [detail] }); } catch (e) { console.error('[Scraper] send failed:', e); }
+        chrome.runtime.sendMessage({ type: 'ADD_BUSINESSES', businesses: [detail] }, () => {
+          if (chrome.runtime.lastError) { /* SW wake-up race — storage will have it */ }
+        });
       }
     }
 
