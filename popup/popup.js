@@ -100,17 +100,44 @@ async function getActiveTab() {
   return tab;
 }
 
+function pingTab(tabId) {
+  return new Promise(resolve => {
+    chrome.tabs.sendMessage(tabId, { type: 'PING' }, res => {
+      resolve(!chrome.runtime.lastError && res?.pong === true);
+    });
+  });
+}
+
+async function ensureContentScript(tabId) {
+  const alive = await pingTab(tabId);
+  if (alive) return true;
+  return new Promise(resolve => {
+    chrome.scripting.executeScript(
+      { target: { tabId }, files: ['content/contentScript.js'] },
+      () => resolve(!chrome.runtime.lastError)
+    );
+  });
+}
+
 async function autoScrape() {
   const tab = await getActiveTab();
   if (!tab) { setStatus('Open Google Maps first.', 'err'); return; }
 
   setScrapingState(true);
-  setStatus('');
+  setStatus('Injecting…');
 
+  const ready = await ensureContentScript(tab.id);
+  if (!ready) {
+    setScrapingState(false);
+    setStatus('Could not inject script. Reload Maps and try again.', 'err');
+    return;
+  }
+
+  setStatus('');
   chrome.tabs.sendMessage(tab.id, { type: 'AUTO_SCRAPE' }, (res) => {
     setScrapingState(false);
     if (chrome.runtime.lastError) {
-      setStatus('Reload the Maps page, then try again.', 'err');
+      setStatus('Script error — reload Maps and try again.', 'err');
       return;
     }
     if (res?.error === 'already_running') {

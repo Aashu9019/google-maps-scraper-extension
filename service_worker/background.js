@@ -51,25 +51,24 @@ function buildHtml() {
     const s = b.socials || {};
     const socialLinks = Object.entries(SOCIAL_META)
       .filter(([k]) => s[k])
-      .map(([k, m]) => `<a href="${esc(s[k])}" target="_blank" rel="noopener"
-        style="display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;
-               background:${m.color};color:#fff;text-decoration:none;margin:2px">${m.label}</a>`)
+      .map(([k, m]) => `<a class="social-chip" href="${esc(s[k])}" target="_blank" rel="noopener"
+        style="background:${m.color}">${m.label}</a>`)
       .join('');
 
+    const phoneHtml   = b.phone   ? `<a class="action-btn phone-btn" href="tel:${esc(b.phone)}">📞 ${esc(b.phone)}</a>` : '';
+    const websiteHtml = b.website ? `<a class="action-btn web-btn" href="${esc(b.website)}" target="_blank" rel="noopener">🌐 Website</a>` : '';
+    const mapsHtml    = b.mapsLink ? `<a class="action-btn maps-btn" href="${esc(b.mapsLink)}" target="_blank" rel="noopener">📍 Maps</a>` : '';
+
     return `<div class="card" id="${cardId}">
-  <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+  <div class="card-header">
     <div class="card-name">${esc(b.name || '(No name)')}</div>
     <button class="btn-tick" onclick="toggle('${cardId}')" title="Mark as contacted">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="16" height="16">
-        <polyline points="20 6 9 17 4 12"/>
-      </svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" width="18" height="18"><polyline points="20 6 9 17 4 12"/></svg>
     </button>
   </div>
-  ${b.phone   ? `<div class="detail">📞 <a href="tel:${esc(b.phone)}">${esc(b.phone)}</a></div>` : ''}
-  ${b.website ? `<div class="detail">🌐 <a href="${esc(b.website)}" target="_blank" rel="noopener">${esc(b.website)}</a></div>` : ''}
-  ${b.address ? `<div class="detail">📍 ${esc(b.address)}</div>` : ''}
-  ${b.mapsLink ? `<div class="detail"><a href="${esc(b.mapsLink)}" target="_blank" rel="noopener">View on Google Maps ↗</a></div>` : ''}
-  ${socialLinks ? `<div style="margin-top:8px">${socialLinks}</div>` : ''}
+  ${b.address ? `<div class="card-address">📍 ${esc(b.address)}</div>` : ''}
+  ${(phoneHtml || websiteHtml || mapsHtml) ? `<div class="action-row">${phoneHtml}${websiteHtml}${mapsHtml}</div>` : ''}
+  ${socialLinks ? `<div class="social-row">${socialLinks}</div>` : ''}
 </div>`;
   }).join('\n');
 
@@ -81,46 +80,83 @@ function buildHtml() {
 <title>Google Maps Export</title>
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
-  body{font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;background:#f3f4f6;color:#202124}
-  .topbar{position:sticky;top:0;z-index:100;background:#1a73e8;color:#fff;padding:12px 20px;
-    display:flex;align-items:center;gap:14px;box-shadow:0 2px 8px rgba(0,0,0,.2)}
-  .topbar h1{font-size:17px;font-weight:700;flex:1}
-  .chip{padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;background:rgba(255,255,255,.18)}
-  .chip.green{background:#34d399;color:#064e3b}
-  .chip.red{background:#f87171;color:#7f1d1d}
-  .filters{display:flex;gap:7px;margin:14px 20px 0}
-  .filter-btn{padding:6px 16px;border-radius:20px;border:1.5px solid #d1d5db;background:#fff;
-    font-size:12px;font-weight:600;cursor:pointer;color:#374151;transition:all .15s}
+  body{font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;background:#f0f2f5;color:#1a1a1a;font-size:15px}
+
+  /* ── topbar ── */
+  .topbar{position:sticky;top:0;z-index:100;background:#1a73e8;color:#fff;
+    padding:12px 16px;display:flex;flex-wrap:wrap;align-items:center;gap:8px;
+    box-shadow:0 2px 10px rgba(0,0,0,.25)}
+  .topbar h1{font-size:16px;font-weight:700;flex:1;min-width:120px}
+  .chips{display:flex;gap:6px;flex-wrap:wrap}
+  .chip{padding:3px 10px;border-radius:20px;font-size:12px;font-weight:700;white-space:nowrap}
+  .chip-grey{background:rgba(255,255,255,.2)}
+  .chip-green{background:#22c55e;color:#052e16}
+  .chip-red{background:#ef4444;color:#fff}
+
+  /* ── filters ── */
+  .filter-bar{display:flex;gap:6px;padding:12px 16px 4px;flex-wrap:wrap}
+  .filter-btn{padding:7px 16px;border-radius:20px;border:1.5px solid #d1d5db;background:#fff;
+    font-size:13px;font-weight:600;cursor:pointer;color:#374151;transition:all .15s;white-space:nowrap}
   .filter-btn.active{background:#1a73e8;color:#fff;border-color:#1a73e8}
-  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;
-    padding:16px 20px 30px;max-width:1400px;margin:0 auto}
-  .card{background:#fff;border-radius:12px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.08);
-    border-left:4px solid #1a73e8;transition:all .2s}
-  .card.done{border-left-color:#6ee7b7;background:#f0fdf4;opacity:.75}
-  .card-name{font-size:15px;font-weight:700;margin-bottom:8px;line-height:1.3}
-  .detail{font-size:13px;color:#555;margin-top:5px}
-  .detail a{color:#1a73e8;text-decoration:none}
-  .detail a:hover{text-decoration:underline}
-  .btn-tick{background:#f1f5f9;border:1.5px solid #e2e8f0;border-radius:8px;
-    padding:5px 7px;cursor:pointer;display:flex;align-items:center;color:#64748b;
-    flex-shrink:0;transition:all .15s}
+  .filter-btn:active{transform:scale(.96)}
+
+  /* ── list ── */
+  .list{padding:8px 16px 40px;max-width:680px;margin:0 auto;display:flex;flex-direction:column;gap:10px}
+
+  /* ── card ── */
+  .card{background:#fff;border-radius:14px;padding:14px 14px 12px;
+    box-shadow:0 1px 3px rgba(0,0,0,.09);border-left:4px solid #1a73e8;transition:all .25s}
+  .card.done{border-left-color:#4ade80;background:#f0fdf4;opacity:.8}
+  .card-header{display:flex;align-items:flex-start;gap:10px;margin-bottom:6px}
+  .card-name{font-size:15px;font-weight:700;line-height:1.3;flex:1}
+  .card-address{font-size:12px;color:#666;margin-bottom:8px;line-height:1.4}
+
+  /* ── action buttons ── */
+  .action-row{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:8px}
+  .action-btn{display:inline-flex;align-items:center;gap:5px;padding:7px 14px;
+    border-radius:10px;font-size:13px;font-weight:600;text-decoration:none;
+    white-space:nowrap;transition:filter .15s}
+  .action-btn:hover{filter:brightness(.92)}
+  .phone-btn{background:#dcfce7;color:#166534}
+  .web-btn  {background:#dbeafe;color:#1e40af}
+  .maps-btn {background:#fef3c7;color:#92400e}
+
+  /* ── social chips ── */
+  .social-row{display:flex;gap:5px;flex-wrap:wrap}
+  .social-chip{display:inline-block;padding:3px 10px;border-radius:20px;
+    font-size:11px;font-weight:700;color:#fff;text-decoration:none;transition:opacity .15s}
+  .social-chip:hover{opacity:.82}
+
+  /* ── tick button ── */
+  .btn-tick{background:#f1f5f9;border:1.5px solid #e2e8f0;border-radius:10px;
+    padding:6px 8px;cursor:pointer;display:flex;align-items:center;color:#64748b;
+    flex-shrink:0;transition:all .15s;min-width:36px;min-height:36px;justify-content:center}
   .btn-tick:hover{background:#dcfce7;border-color:#86efac;color:#16a34a}
-  .card.done .btn-tick{background:#dcfce7;border-color:#6ee7b7;color:#16a34a}
+  .card.done .btn-tick{background:#bbf7d0;border-color:#4ade80;color:#15803d}
+
+  @media(max-width:480px){
+    .topbar h1{font-size:14px}
+    .action-btn{font-size:12px;padding:6px 11px}
+    .card-name{font-size:14px}
+    .list{padding:8px 10px 40px}
+  }
 </style>
 </head>
 <body>
 <div class="topbar">
   <h1>📍 Google Maps Export</h1>
-  <span class="chip" id="stat-total">${businesses.length} total</span>
-  <span class="chip green" id="stat-done">0 contacted</span>
-  <span class="chip red" id="stat-left">${businesses.length} left</span>
+  <div class="chips">
+    <span class="chip chip-grey" id="stat-total">${businesses.length} total</span>
+    <span class="chip chip-green" id="stat-done">0 contacted</span>
+    <span class="chip chip-red" id="stat-left">${businesses.length} left</span>
+  </div>
 </div>
-<div class="filters">
+<div class="filter-bar">
   <button class="filter-btn active" onclick="setFilter('all',this)">All</button>
   <button class="filter-btn" onclick="setFilter('todo',this)">Not Contacted</button>
   <button class="filter-btn" onclick="setFilter('done',this)">Contacted ✓</button>
 </div>
-<div class="grid" id="grid">
+<div class="list" id="list">
 ${cards}
 </div>
 <script>
@@ -130,7 +166,6 @@ function save(){localStorage.setItem(KEY,JSON.stringify(Array.from(contacted)))}
 function stats(){
   var d=contacted.size,t=document.querySelectorAll('.card').length;
   document.getElementById('stat-done').textContent=d+' contacted';
-  document.getElementById('stat-left').textContent+(t-d)+' left';
   document.getElementById('stat-left').textContent=(t-d)+' left';
 }
 function toggle(id){
@@ -152,10 +187,7 @@ function applyFilter(){
   });
 }
 (function init(){
-  contacted.forEach(function(id){
-    var el=document.getElementById(id);
-    if(el)el.classList.add('done');
-  });
+  contacted.forEach(function(id){var el=document.getElementById(id);if(el)el.classList.add('done')});
   stats();
 })();
 </script>

@@ -152,15 +152,28 @@ function extractDetailPanel() {
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-function waitForDetailLoaded(timeout = 7000) {
+function waitForDetailLoaded(timeout = 10000) {
   return new Promise(resolve => {
     const start = Date.now();
+    let h1SeenAt = 0;
     function check() {
       if (!window.location.href.includes('/maps/place')) { resolve(false); return; }
+      const elapsed = Date.now() - start;
+      if (elapsed > timeout) { resolve(true); return; }
+
       const h1 = document.querySelector('[role="main"] h1') || document.querySelector('h1');
-      if (h1 && norm(h1.textContent).length > 1) { resolve(true); return; }
-      if (Date.now() - start > timeout) { resolve(false); return; }
-      setTimeout(check, 250);
+      if (!h1 || norm(h1.textContent).length < 2) {
+        setTimeout(check, 250); return;
+      }
+      if (!h1SeenAt) h1SeenAt = Date.now();
+
+      // Wait for phone or website element to appear, OR 3s after h1, whichever first
+      const hasPhone   = document.querySelector('[data-item-id^="phone:tel:"]') || document.querySelector('a[href^="tel:"]');
+      const hasWebsite = document.querySelector('[data-item-id="authority"]');
+      const sinceH1    = Date.now() - h1SeenAt;
+
+      if (hasPhone || hasWebsite || sinceH1 > 3000) { resolve(true); return; }
+      setTimeout(check, 300);
     }
     check();
   });
@@ -214,20 +227,20 @@ async function runAutoScrape() {
     const loaded = await waitForDetailLoaded(7000);
 
     if (loaded) {
-      await sleep(600);
+      await sleep(800);
       const detail = extractDetailPanel();
-      if (detail) results.push(detail);
+      if (detail) {
+        results.push(detail);
+        try { chrome.runtime.sendMessage({ type: 'ADD_BUSINESSES', businesses: [detail] }); } catch (_) {}
+      }
     }
 
     history.back();
     await waitForListView(6000);
-    await sleep(400);
+    await sleep(500);
     done++;
   }
 
-  if (results.length) {
-    try { chrome.runtime.sendMessage({ type: 'ADD_BUSINESSES', businesses: results }); } catch (_) {}
-  }
   sendProgress(done, total, '', 'done');
   autoScraping = false;
   return { ok: true, done: results.length };
@@ -252,6 +265,10 @@ function tryExtractAndSend() {
 }
 
 chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
+  if (msg?.type === 'PING') {
+    sendResponse({ pong: true });
+    return;
+  }
   if (msg?.type === 'SCRAPE_NOW') {
     seenIds = new Set();
     setTimeout(() => {
