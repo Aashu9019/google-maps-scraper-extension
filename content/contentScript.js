@@ -5,8 +5,9 @@ function norm(s) { return (s || '').toString().replace(/\s+/g, ' ').trim(); }
 function unwrapUrl(href) {
   try {
     const u = new URL(href);
-    if (/google\./i.test(u.hostname) && u.pathname === '/url') {
-      const q = u.searchParams.get('q');
+    if (/google\./i.test(u.hostname)) {
+      // handles /url?q=, /maps/url?q=, /search?q=, etc.
+      const q = u.searchParams.get('q') || u.searchParams.get('url');
       if (q && /^https?:\/\//i.test(q)) return q;
     }
   } catch (_) {}
@@ -15,7 +16,8 @@ function unwrapUrl(href) {
 
 const UI_NOISE = new Set([
   'results','directions','hotels','things to do','restaurants','gas stations',
-  'pharmacies','parking','transit','back','close','more','nearby','explore'
+  'pharmacies','parking','transit','back','close','more','nearby','explore',
+  'send to your phone','add a label','suggest an edit','share','save'
 ]);
 function isRealName(n) {
   return !(!n || n.length < 2 || n.length > 120 ||
@@ -55,39 +57,61 @@ function isOnDetailPage() {
 }
 
 function extractAddress(scope) {
-  const el = (scope || document).querySelector('[data-item-id="address"]')
-    || (scope || document).querySelector('[data-tooltip="Copy address"]');
-  if (el) return norm(el.getAttribute('aria-label') || el.textContent);
+  // Try multiple selectors Google Maps uses
+  const selectors = [
+    '[data-item-id="address"]',
+    '[data-tooltip="Copy address"]',
+    'button[data-item-id*="address"]',
+  ];
+  for (const sel of selectors) {
+    const el = (scope || document).querySelector(sel);
+    if (el) {
+      const text = norm(el.getAttribute('aria-label') || el.textContent || '');
+      if (text && text.length > 3) return text.replace(/^address:\s*/i, '');
+    }
+  }
   return '';
 }
 
 function extractPhone(scope) {
   const root = scope || document.body;
 
-  // 1. tel: link
+  // 1. Standard tel: anchor link
   const tel = root.querySelector('a[href^="tel:"]');
-  if (tel) return tel.href.replace(/^tel:/i, '').trim();
+  if (tel) return decodeURIComponent(tel.href).replace(/^tel:/i, '').trim();
 
-  // 2. data-item-id^="phone:tel:" with decodeURIComponent
-  const phoneItem = root.querySelector('[data-item-id^="phone:tel:"]');
-  if (phoneItem) {
+  // 2. data-item-id^="phone:tel:" — number embedded in attribute
+  const phoneAttr = root.querySelector('[data-item-id^="phone:tel:"]');
+  if (phoneAttr) {
     try {
-      const raw = decodeURIComponent(phoneItem.getAttribute('data-item-id').replace(/^phone:tel:/i, '')).trim();
+      const raw = decodeURIComponent(
+        phoneAttr.getAttribute('data-item-id').replace(/^phone:tel:/i, '')
+      ).trim();
       if (raw && /\d{4,}/.test(raw)) return raw;
     } catch (_) {}
-    const inner = norm(phoneItem.textContent || '');
+    // fallback: read text inside the button
+    const inner = norm(phoneAttr.textContent || '');
     const m = inner.match(/(\+?[\d][\d\s().‑\-]{5,}[\d])/);
     if (m && m[1].replace(/\D/g, '').length >= 7) return norm(m[1]);
   }
 
-  // 3. aria-label "Phone: ..."
+  // 3. aria-label containing "Phone:" or "Call:"
   for (const node of root.querySelectorAll('[aria-label]')) {
-    const label = (node.getAttribute('aria-label') || '').trim();
-    const m = label.match(/^(?:phone|tel)[:\s]+(\+?[\d][\d\s().‑\-]{5,}[\d])/i);
-    if (m) return norm(m[1]);
+    const label = norm(node.getAttribute('aria-label') || '');
+    const m = label.match(/(?:phone|call|tel)[:\s]+(\+?[\d][\d\s().‑\-]{5,}[\d])/i);
+    if (m && m[1].replace(/\D/g, '').length >= 7) return norm(m[1]);
   }
 
-  // 4. Leaf-element text scan — desktop Maps renders phone as bare text
+  // 4. Any button/element whose aria-label IS a phone number
+  for (const node of root.querySelectorAll('[aria-label]')) {
+    const label = norm(node.getAttribute('aria-label') || '');
+    if (/^(\+?[\d][\d\s().‑\-]{5,}[\d])$/.test(label)) {
+      const digits = label.replace(/\D/g, '');
+      if (digits.length >= 7 && digits.length <= 15) return label;
+    }
+  }
+
+  // 5. Leaf-element text scan — Maps desktop sometimes renders bare number text
   for (const node of root.querySelectorAll('*')) {
     if (node.children.length > 0) continue;
     const text = (node.textContent || '').trim();
@@ -96,23 +120,49 @@ function extractPhone(scope) {
       if (digits.length >= 7 && digits.length <= 15) return text;
     }
   }
+
   return '';
 }
 
 function extractWebsite(scope) {
   const root = scope || document.body;
-  const el = root.querySelector('[data-item-id="authority"]');
-  if (el) {
-    const a = el.querySelector('a[href]') || (el.tagName === 'A' ? el : null);
-    if (a) return unwrapUrl(a.href);
-    const href = el.getAttribute('href');
-    if (href) return unwrapUrl(href);
+
+  // 1. data-item-id="authority" — the standard website button
+  const authority = root.querySelector('[data-item-id="authority"]');
+  if (authority) {
+    const a = authority.tagName === 'A' ? authority : authority.querySelector('a[href]');
+    if (a && a.href) return unwrapUrl(a.href);
+    if (authority.getAttribute('href')) return unwrapUrl(authority.getAttribute('href'));
+    // aria-label fallback
+    const label = authority.getAttribute('aria-label') || '';
+    const m = label.match(/https?:\/\/[^\s]+/);
+    if (m) return m[0];
   }
-  // Fallback: any external link in detail panel that isn't a Google/Maps URL
-  for (const a of root.querySelectorAll('a[href^="http"]')) {
-    const h = a.href || '';
-    if (!/google\.|goo\.gl/i.test(h)) return unwrapUrl(h);
+
+  // 2. Any element with data-item-id containing "web" or "url"
+  for (const sel of ['[data-item-id*="web"]', '[data-item-id*="url"]', '[data-item-id*="site"]']) {
+    const el = root.querySelector(sel);
+    if (el) {
+      const a = el.tagName === 'A' ? el : el.querySelector('a[href]');
+      if (a && a.href && !/maps\.google|google\.com\/maps/i.test(a.href)) return unwrapUrl(a.href);
+    }
   }
+
+  // 3. aria-label "Website" button
+  for (const node of root.querySelectorAll('[aria-label]')) {
+    const label = (node.getAttribute('aria-label') || '').toLowerCase();
+    if (label === 'website' || label.startsWith('open website') || label.startsWith('visit website')) {
+      const a = node.tagName === 'A' ? node : node.querySelector('a[href]');
+      if (a && a.href) return unwrapUrl(a.href);
+    }
+  }
+
+  // 4. Any Google redirect link (google.com/url?q=...) in the detail panel — these are always website links
+  for (const a of root.querySelectorAll('a[href*="/url?q="], a[href*="maps/url?"]')) {
+    const unwrapped = unwrapUrl(a.href);
+    if (unwrapped !== a.href) return unwrapped; // only return if we successfully unwrapped
+  }
+
   return '';
 }
 
@@ -145,41 +195,44 @@ function extractDetailPanel() {
     address:  extractAddress(main || scope),
     phone:    extractPhone(scope),
     website:  extractWebsite(scope),
-    mapsLink: window.location.href,
+    mapsLink: window.location.href.split('?')[0], // clean URL
     socials:  extractSocials(scope),
   };
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-function waitForDetailLoaded(timeout = 10000) {
+function waitForDetailLoaded(timeout = 12000) {
   return new Promise(resolve => {
     const start = Date.now();
     let h1SeenAt = 0;
     function check() {
+      // If we navigated away from the detail page, stop
       if (!window.location.href.includes('/maps/place')) { resolve(false); return; }
       const elapsed = Date.now() - start;
       if (elapsed > timeout) { resolve(true); return; }
 
       const h1 = document.querySelector('[role="main"] h1') || document.querySelector('h1');
       if (!h1 || norm(h1.textContent).length < 2) {
-        setTimeout(check, 250); return;
+        setTimeout(check, 300); return;
       }
       if (!h1SeenAt) h1SeenAt = Date.now();
 
-      // Wait for phone or website element to appear, OR 3s after h1, whichever first
-      const hasPhone   = document.querySelector('[data-item-id^="phone:tel:"]') || document.querySelector('a[href^="tel:"]');
-      const hasWebsite = document.querySelector('[data-item-id="authority"]');
-      const sinceH1    = Date.now() - h1SeenAt;
+      // Once h1 is visible, wait for contact info OR up to 5 seconds
+      const hasPhone = document.querySelector('[data-item-id^="phone:tel:"]')
+        || document.querySelector('a[href^="tel:"]');
+      const hasWebsite = document.querySelector('[data-item-id="authority"]')
+        || document.querySelector('a[href*="/url?q="]');
+      const sinceH1 = Date.now() - h1SeenAt;
 
-      if (hasPhone || hasWebsite || sinceH1 > 3000) { resolve(true); return; }
-      setTimeout(check, 300);
+      if (hasPhone || hasWebsite || sinceH1 > 5000) { resolve(true); return; }
+      setTimeout(check, 350);
     }
     check();
   });
 }
 
-function waitForListView(timeout = 6000) {
+function waitForListView(timeout = 7000) {
   return new Promise(resolve => {
     const start = Date.now();
     function check() {
@@ -213,21 +266,33 @@ async function runAutoScrape() {
     return name && isRealName(name);
   });
 
-  const total = anchors.length;
+  // Remove duplicates by place key
+  const seen = new Set();
+  const targets = anchors.filter(a => {
+    const key = placeKeyFromUrl(a.href) || norm(a.getAttribute('aria-label') || '').toLowerCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  const total = targets.length;
   let done = 0;
   const results = [];
 
-  for (const anchor of anchors) {
+  for (const anchor of targets) {
     if (!autoScraping) break;
     const name = norm(anchor.getAttribute('aria-label') || '');
     sendProgress(done, total, name, 'scraping');
 
+    // Click the anchor and wait for navigation
     anchor.click();
-    await sleep(400);
-    const loaded = await waitForDetailLoaded(7000);
+    await sleep(600);
+
+    const loaded = await waitForDetailLoaded(12000);
 
     if (loaded) {
-      await sleep(800);
+      // Extra pause to let contact info render after h1 appears
+      await sleep(1200);
       const detail = extractDetailPanel();
       if (detail) {
         results.push(detail);
@@ -236,9 +301,10 @@ async function runAutoScrape() {
     }
 
     history.back();
-    await waitForListView(6000);
-    await sleep(500);
+    await waitForListView(7000);
+    await sleep(600);
     done++;
+    sendProgress(done, total, name, 'scraping');
   }
 
   sendProgress(done, total, '', 'done');
