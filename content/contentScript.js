@@ -355,8 +355,10 @@ chrome.runtime.onMessage.addListener((msg, _, sendResponse) => {
     return true;
   }
   if (msg?.type === 'AUTO_SCRAPE') {
-    runAutoScrape().then(sendResponse);
-    return true;
+    if (autoScraping) { sendResponse({ ok: false, error: 'already_running' }); return false; }
+    sendResponse({ ok: true, started: true });
+    runAutoScrape();
+    return false;
   }
   if (msg?.type === 'STOP_AUTO_SCRAPE') {
     autoScraping = false;

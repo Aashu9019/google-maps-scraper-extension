@@ -135,17 +135,12 @@ async function autoScrape() {
 
   setStatus('');
   chrome.tabs.sendMessage(tab.id, { type: 'AUTO_SCRAPE' }, (res) => {
-    setScrapingState(false);
-    if (chrome.runtime.lastError) {
-      setStatus('Script error — reload Maps and try again.', 'err');
+    if (chrome.runtime.lastError || !res?.ok) {
+      setScrapingState(false);
+      setStatus(res?.error === 'already_running' ? 'Already scraping.' : 'Script error — reload Maps and try again.', 'err');
       return;
     }
-    if (res?.error === 'already_running') {
-      setStatus('Already scraping.', 'err');
-      return;
-    }
-    setStatus(`Done! ${res?.done ?? 0} businesses scraped.`, 'ok');
-    refresh();
+    // Scraping runs in background; refresh() detects done via progress messages
   });
 }
 
