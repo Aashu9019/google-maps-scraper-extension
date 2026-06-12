@@ -1,0 +1,49 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Maps Business Exporter</title>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { font-family: -apple-system, 'Segoe UI', Roboto, Arial, sans-serif; width: 320px; background: #fff; color: #202124; }
+      .header { background: #1a73e8; padding: 14px 16px; color: #fff; }
+      .header-title { font-size: 15px; font-weight: 700; }
+      .count-row { display: flex; align-items: baseline; gap: 7px; margin-top: 8px; }
+      .count-number { font-size: 36px; font-weight: 800; line-height: 1; }
+      .count-label  { font-size: 13px; opacity: 0.82; }
+      .body { padding: 12px; }
+      .btn { width: 100%; padding: 9px; border-radius: 7px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; margin-bottom: 7px; }
+      .btn-auto  { background: #1a73e8; color: #fff; }
+      .btn-html  { background: #0f9d58; color: #fff; }
+      .btn-csv   { background: #f09300; color: #fff; }
+      .btn-clear { background: #f1f3f4; color: #5f6368; border: 1px solid #dadce0; }
+      .status { font-size: 12px; color: #5f6368; min-height: 15px; text-align: center; margin-bottom: 6px; }
+      .status.ok  { color: #0f9d58; }
+      .status.err { color: #d93025; }
+      .preview-list { max-height: 150px; overflow-y: auto; }
+      .biz-card { padding: 6px 8px; border-radius: 6px; background: #f8f9fa; margin-bottom: 4px; border-left: 3px solid #1a73e8; }
+      .biz-name { font-size: 13px; font-weight: 600; }
+      .empty { text-align: center; padding: 20px 10px; color: #9aa0a6; font-size: 12px; }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <div class="header-title">Maps Business Exporter</div>
+      <div class="count-row">
+        <div class="count-number" id="count">0</div>
+        <div class="count-label">businesses captured</div>
+      </div>
+    </div>
+    <div class="body">
+      <button class="btn btn-auto" id="autoBtn">Scrape Visible Businesses</button>
+      <button class="btn btn-html" id="exportHtmlBtn">Export HTML</button>
+      <button class="btn btn-csv"  id="exportCsvBtn">Export CSV</button>
+      <button class="btn btn-clear" id="clearBtn">Clear All</button>
+      <div class="status" id="status"></div>
+      <div class="preview-list" id="previewList">
+        <div class="empty">Open Google Maps and click Scrape.</div>
+      </div>
+    </div>
+    <script src="popup.js"></script>
+  </body>
+</html>
