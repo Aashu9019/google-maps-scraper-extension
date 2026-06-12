@@ -5,44 +5,151 @@
     <title>Maps Business Exporter</title>
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
-      body { font-family: -apple-system, 'Segoe UI', Roboto, Arial, sans-serif; width: 320px; background: #fff; color: #202124; }
-      .header { background: #1a73e8; padding: 14px 16px; color: #fff; }
+      body {
+        font-family: -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;
+        width: 340px; background: #fff; color: #202124;
+      }
+
+      .header {
+        background: linear-gradient(135deg, #1a73e8 0%, #0d47a1 100%);
+        padding: 14px 16px 16px; color: #fff;
+      }
+      .header-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+      .header-icon {
+        width: 34px; height: 34px; background: rgba(255,255,255,0.18);
+        border-radius: 9px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+      }
       .header-title { font-size: 15px; font-weight: 700; }
-      .count-row { display: flex; align-items: baseline; gap: 7px; margin-top: 8px; }
-      .count-number { font-size: 36px; font-weight: 800; line-height: 1; }
+      .header-sub   { font-size: 11px; opacity: 0.72; margin-top: 1px; }
+      .count-row    { display: flex; align-items: baseline; gap: 7px; }
+      .count-number { font-size: 44px; font-weight: 800; line-height: 1; }
       .count-label  { font-size: 13px; opacity: 0.82; }
-      .body { padding: 12px; }
-      .btn { width: 100%; padding: 9px; border-radius: 7px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; margin-bottom: 7px; }
-      .btn-auto  { background: #1a73e8; color: #fff; }
-      .btn-html  { background: #0f9d58; color: #fff; }
-      .btn-csv   { background: #f09300; color: #fff; }
-      .btn-clear { background: #f1f3f4; color: #5f6368; border: 1px solid #dadce0; }
-      .status { font-size: 12px; color: #5f6368; min-height: 15px; text-align: center; margin-bottom: 6px; }
+
+      .body { padding: 12px 12px 8px; }
+
+      .btn {
+        flex: 1; padding: 9px 10px; border-radius: 8px; border: none;
+        cursor: pointer; font-size: 13px; font-weight: 600;
+        display: flex; align-items: center; justify-content: center; gap: 6px;
+        transition: filter .12s, transform .1s; white-space: nowrap;
+      }
+      .btn:hover   { filter: brightness(.92); }
+      .btn:active  { transform: scale(.97); }
+      .btn:disabled { opacity: .5; cursor: default; pointer-events: none; }
+
+      .btn-auto   { background: #1a73e8; color: #fff; padding: 12px 10px; font-size: 14px; }
+      .btn-stop   { background: #d93025; color: #fff; padding: 12px 10px; font-size: 14px; }
+      .btn-html   { background: #0f9d58; color: #fff; }
+      .btn-csv    { background: #f09300; color: #fff; }
+      .btn-clear  { background: #f1f3f4; color: #5f6368; border: 1px solid #dadce0; }
+      .btn-row    { display: flex; gap: 7px; }
+
+      .progress-box {
+        background: #f0f4ff; border: 1px solid #c5d5f5; border-radius: 8px;
+        padding: 10px 12px; margin-bottom: 10px;
+      }
+      .progress-label { font-size: 12px; color: #1a73e8; font-weight: 600; margin-bottom: 6px; }
+      .progress-bar-wrap {
+        background: #dce8fb; border-radius: 99px; height: 6px; overflow: hidden;
+      }
+      .progress-bar { background: #1a73e8; height: 100%; border-radius: 99px; transition: width .3s; }
+      .progress-current { font-size: 11px; color: #5f6368; margin-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+      .status { font-size: 12px; color: #5f6368; min-height: 15px; text-align: center; margin-bottom: 8px; }
       .status.ok  { color: #0f9d58; }
       .status.err { color: #d93025; }
-      .preview-list { max-height: 150px; overflow-y: auto; }
-      .biz-card { padding: 6px 8px; border-radius: 6px; background: #f8f9fa; margin-bottom: 4px; border-left: 3px solid #1a73e8; }
-      .biz-name { font-size: 13px; font-weight: 600; }
-      .empty { text-align: center; padding: 20px 10px; color: #9aa0a6; font-size: 12px; }
+
+      .divider { height: 1px; background: #f1f3f4; margin: 8px 0 10px; }
+
+      .section-label {
+        font-size: 10px; font-weight: 700; color: #9aa0a6;
+        letter-spacing: .7px; text-transform: uppercase; margin-bottom: 7px;
+      }
+
+      .preview-list { max-height: 175px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+      .preview-list::-webkit-scrollbar { width: 3px; }
+      .preview-list::-webkit-scrollbar-thumb { background: #dadce0; border-radius: 2px; }
+
+      .biz-card { padding: 7px 9px; border-radius: 7px; background: #f8f9fa; border-left: 3px solid #1a73e8; }
+      .biz-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .biz-meta { font-size: 11px; color: #5f6368; margin-top: 3px; display: flex; flex-wrap: wrap; gap: 6px; }
+
+      .empty { text-align: center; padding: 20px 10px; color: #9aa0a6; font-size: 12px; line-height: 1.6; }
+      .empty strong { color: #5f6368; }
+
+      .tip-box {
+        font-size: 11px; color: #5f6368; background: #fef9e7; border: 1px solid #fce4a0;
+        border-radius: 7px; padding: 8px 10px; margin-top: 8px; line-height: 1.5;
+      }
+      .tip-box strong { color: #c17800; }
+
+      .hidden { display: none !important; }
     </style>
   </head>
   <body>
     <div class="header">
-      <div class="header-title">Maps Business Exporter</div>
+      <div class="header-row">
+        <div class="header-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
+            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+          </svg>
+        </div>
+        <div>
+          <div class="header-title">Maps Business Exporter</div>
+          <div class="header-sub">Auto-scrape Google Maps listings</div>
+        </div>
+      </div>
       <div class="count-row">
         <div class="count-number" id="count">0</div>
         <div class="count-label">businesses captured</div>
       </div>
     </div>
+
     <div class="body">
-      <button class="btn btn-auto" id="autoBtn">Scrape Visible Businesses</button>
-      <button class="btn btn-html" id="exportHtmlBtn">Export HTML</button>
-      <button class="btn btn-csv"  id="exportCsvBtn">Export CSV</button>
-      <button class="btn btn-clear" id="clearBtn">Clear All</button>
-      <div class="status" id="status"></div>
-      <div class="preview-list" id="previewList">
-        <div class="empty">Open Google Maps and click Scrape.</div>
+
+      <button class="btn btn-auto" id="autoBtn" style="width:100%;margin-bottom:7px">
+        🤖 Auto Scrape All Visible
+      </button>
+
+      <button class="btn btn-stop hidden" id="stopBtn" style="width:100%;margin-bottom:7px">
+        ■ Stop Scraping
+      </button>
+
+      <div class="progress-box hidden" id="progressBox">
+        <div class="progress-label" id="progressLabel">Scraping 0 / 0…</div>
+        <div class="progress-bar-wrap"><div class="progress-bar" id="progressBar" style="width:0%"></div></div>
+        <div class="progress-current" id="progressCurrent"></div>
       </div>
+
+      <div class="btn-row" style="margin-bottom:7px">
+        <button class="btn btn-html" id="exportHtmlBtn">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+          Export HTML
+        </button>
+        <button class="btn btn-csv" id="exportCsvBtn">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+          Export CSV
+        </button>
+        <button class="btn btn-clear" id="clearBtn">Clear</button>
+      </div>
+
+      <div class="status" id="status"></div>
+
+      <div class="divider"></div>
+
+      <div class="section-label">Captured Businesses</div>
+      <div class="preview-list" id="previewList">
+        <div class="empty">
+          Open Google Maps, search for businesses,<br>
+          then click <strong>Auto Scrape All Visible</strong>.
+        </div>
+      </div>
+
+      <div class="tip-box">
+        <strong>How it works:</strong> The extension automatically opens each visible business, grabs phone &amp; website, then returns — no manual clicking needed.
+        Scroll the Maps list to load more businesses, then scrape again.
+      </div>
+
     </div>
     <script src="popup.js"></script>
   </body>
