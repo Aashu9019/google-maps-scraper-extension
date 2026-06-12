@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Google Maps Business Exporter",
+  "version": "1.0.0",
+  "description": "Exports visible Google Maps business listings to a downloadable HTML file with call/mail links.",
+  "action": {
+    "default_title": "Export Maps Businesses",
+    "default_popup": "popup/popup.html"
+  },
+  "permissions": ["activeTab", "scripting", "downloads", "storage"],
+  "host_permissions": ["https://www.google.com/maps/*", "https://www.google.co.uk/maps/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://www.google.com/maps/*", "https://www.google.co.uk/maps/*"],
+      "js": ["content/contentScript.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "background": {
+    "service_worker": "service_worker/background.js"
+  }
+}
